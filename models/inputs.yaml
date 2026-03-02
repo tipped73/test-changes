@@ -1,0 +1,68 @@
+inputs:
+  - name: rsIdentifies
+    contract:
+      is_optional: false
+      is_event_stream: true
+      with_entity_ids:
+        - user
+      with_columns:
+        - name: timestamp
+          datatype: timestamp
+        - name: user_id
+        - name: anonymous_id
+        - name: email
+    app_defaults:
+      csv: "../common.xtra/identifies.csv"
+      occurred_at_col: timestamp
+      ids:
+        - select: "user_id"
+          type: user_id
+          entity: user
+        - select: "anonymous_id"
+          type: anonymous_id
+          entity: user
+        - select: "lower(email)"
+          type: email
+          entity: user
+  - name: rsTracks
+    contract:
+      is_optional: false
+      is_event_stream: true
+      with_entity_ids:
+        - user
+      with_columns:
+        - name: timestamp
+          datatype: timestamp
+        - name: user_id
+        - name: anonymous_id
+    app_defaults:
+      csv: "../common.xtra/tracks.csv"
+      occurred_at_col: timestamp
+      ids:
+        - select: "user_id"
+          type: user_id
+          entity: user
+        - select: "anonymous_id"
+          type: anonymous_id
+          entity: user
+  - name: rsPages
+    contract:
+      is_optional: false
+      is_event_stream: true
+      with_entity_ids:
+        - user
+      with_columns:
+        - name: timestamp
+          datatype: timestamp
+        - name: user_id
+        - name: anonymous_id
+    app_defaults:
+      csv: "../common.xtra/pages.csv"
+      occurred_at_col: timestamp
+      ids:
+        - select: "user_id"
+          type: user_id
+          entity: user
+        - select: "anonymous_id"
+          type: anonymous_id
+          entity: user

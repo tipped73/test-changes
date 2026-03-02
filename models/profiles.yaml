@@ -1,0 +1,89 @@
+models:
+  - name: test_id__
+    model_type: id_stitcher
+    model_spec:
+      entity_key: user
+      time_grain: "day"
+      edge_sources:
+        - from: inputs/rsIdentifies
+        - from: inputs/rsTracks
+        - from: inputs/rsPages
+var_groups:
+  - name: user_known_weekly_vars
+    entity_key: user
+    time_grain: "week"
+    vars:
+      - entity_var:
+          name: first_activity_time_weekly
+          select: min(timestamp)
+          from: inputs/rsTracks
+          description: First Activity Time
+  - name: user_vars
+    time_grain: "day"
+    entity_key: user
+    vartable_group: user2
+    vars:
+      - entity_var:
+          name: first_activity_time_daily
+          select: min(timestamp)
+          from: inputs/rsTracks
+          is_feature: false
+      - entity_var:
+          name: first_activity_time_daily_mixed
+          select: |
+            coalesce( least({{user.Var("first_activity_time_daily")}}, {{user.Var("first_activity_time_weekly")}})
+            , {{user.Var("first_activity_time_daily")}}, {{user.Var("first_activity_time_weekly")}})
+          vartable_group: user3
+          description: First Activity Time
+  - name: user_vars
+    time_grain: "day"
+    entity_key: user
+    vars:
+      - entity_var:
+          name: max_timestamp
+          select: max(timestamp)
+          from: inputs/rsIdentifies
+          is_feature: false
+      - entity_var:
+          name: days_since_last_seen
+          select: "{{macro_datediff('{{user.Var(\"max_timestamp\")}}')}}"
+      - entity_var:
+          name: is_churned_30_days
+          select: case when {{user.Var("days_since_last_seen")}} > 30 then 1 else 0 end
+      - entity_var:
+          name: days_since_account_creation
+          select: "{{macro_datediff('min(timestamp)')}}"
+          from: inputs/rsIdentifies
+      - entity_var:
+          name: country
+          from: inputs/rsIdentifies
+          select: first_value(address_country)
+          where: address_country is not null and address_country!=''
+          window:
+            order_by:
+              - timestamp desc
+            frame_clause: rows between unbounded preceding and unbounded following
+      - entity_var:
+          name: id_type_email_count
+          from: models/test_id__
+          select: sum(case when other_id_type = 'email' then 1 else 0 end)
+      - entity_var: # main id as a feature
+          name: feature_rudder_id
+          select: ANY_VALUE(user_main_id)
+          from: models/test_id__
+      - input_var:
+          name: input_rudder_id
+          select: user_main_id
+          from: inputs/rsIdentifies
+      - entity_var:
+          name: feature_rudder_id_2
+          select: ANY_VALUE({{rsIdentifies.Var("input_rudder_id")}})
+          from: inputs/rsIdentifies
+      - input_var:
+          name: user_main_id_input
+          select: user_main_id
+          from: models/identifies_sql_vars
+      - entity_var:
+          name: primary_user_id_feature
+          select: ANY_VALUE({{identifies_sql_vars.Var("user_main_id_input")}})
+          from: models/identifies_sql_vars

@@ -1,0 +1,71 @@
+models:
+  - name: identifies_sql_vars
+    model_type: sql_template
+    model_spec:
+      entity_cohort: models/users_with_valid_email
+      time_grain: "day"
+      multi_sql: |
+        {% with identifies = this.DeRef("inputs/rsIdentifies") ids = this.DeRef("models/test_id__") %}
+        CREATE TABLE {{this}} AS (
+        SELECT
+          user_main_id,
+          any_value(user_id) as user_id,
+          any_value(anonymous_id) as anonymous_id,
+          any_value(email) as email,
+          any_value(last_name_var) as last_name
+          FROM (
+            SELECT *,
+            CASE
+              WHEN last_name != '' THEN
+                FIRST_VALUE(last_name) OVER (PARTITION BY user_main_id ORDER BY timestamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+              ELSE NULL
+                END AS last_name_var
+            FROM (
+              SELECT
+                  *,
+                  CASE
+                      WHEN user_id IS NOT NULL THEN user_id
+                      WHEN anonymous_id IS NOT NULL 
+                        AND  NOT anonymous_id = ''  AND  NOT anonymous_id = 'unknown'  AND  NOT anonymous_id = 'NaN' 
+                      THEN anonymous_id
+                      WHEN email IS NOT NULL THEN email
+                  END AS node_id,
+                  CASE
+                      WHEN user_id IS NOT NULL THEN 'user_id'
+                      WHEN anonymous_id IS NOT NULL 
+                        AND  NOT anonymous_id = ''  AND  NOT anonymous_id = 'unknown'  AND  NOT anonymous_id = 'NaN' 
+                      THEN 'anonymous_id'
+                      WHEN email IS NOT NULL THEN 'email'
+                  END AS node_id_type
+              FROM {{identifies}}
+            ) it
+            JOIN {{ids}} AS idst ON it.node_id = idst.other_id AND it.node_id_type = idst.other_id_type 
+            where last_name != ''
+          )
+          GROUP BY user_main_id
+        );
+        {% endwith %}
+      ids:
+        - select: user_main_id
+          type: rudder_id
+          entity: user
+        - select: user_id
+          type: user_id
+          entity: user
+        - select: anonymous_id
+          type: anonymous_id
+          entity: user
+        - select: email
+          type: email
+          entity: user
+      contract:
+        is_optional: false
+        is_event_stream: false
+        with_entity_ids:
+          - user
+        with_columns:
+          - name: user_id
+          - name: anonymous_id
+          - name: email
+      features:
+        - name: last_name

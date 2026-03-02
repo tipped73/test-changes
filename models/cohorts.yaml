@@ -1,0 +1,111 @@
+models:
+  - name: users_with_valid_email
+    model_type: entity_cohort
+    model_spec:
+      extends: user/all
+      time_grain: "day"
+      filter_expression:
+        AND:
+          - "NOT {{ user.Var('id_type_email_count') }} = 0"
+          - "{{ user.Var('first_activity_time_daily_mixed') }} IS NULL"
+          - "{{ user.Var('days_since_account_creation')}} > 0"
+      feature_views:
+        name: users_with_valid_email_feature_view
+
+  - name: churned_united_states_users
+    model_type: entity_cohort
+    model_spec:
+      extends: models/users_with_valid_email
+      time_grain: "day"
+      materialization:
+        output_type: table
+      filter_pipeline:
+        - type: exclude
+          value: "{{ user.Var('is_churned_30_days') }} = 0"
+        - type: include
+          value: "{{ user.Var('country')}} = 'United States'"
+      feature_views:
+        name: united_states_users_feature_view
+        materialization:
+          output_type: table
+        using_ids:
+          - id: email
+            name: us_users_with_email
+
+  - name: new_users
+    model_type: entity_cohort
+    model_spec:
+      extends: user/all
+      time_grain: "day"
+      materialization:
+        output_type: table
+      filter_pipeline:
+        - type: exclude
+          sql:
+            select: user_main_id
+            from: "{{this.DeRef('models/test_id__', pre_existing=true, dependency='normal', time_grain_spec='-1Day', checkpoint_name='past')}}"
+  - name: new_users_ft
+    model_type: feature_table_model
+    model_spec:
+      time_grain: "day"
+      entity_cohort: models/new_users
+      features:
+        - campaign_sources
+
+var_groups:
+  - name: users_weekly_vars
+    entity_cohort: models/users_with_valid_email
+    time_grain: "week"
+    vars:
+      - entity_var:
+          name: first_name
+          from: inputs/rsIdentifies
+          select: first_value(first_name)
+          where: first_name is not null and first_name != ''
+          window:
+            order_by:
+              - timestamp desc
+            frame_clause: rows between unbounded preceding and unbounded following
+      - entity_var:
+          name: first_name_copy
+          select: "{{users_with_valid_email.first_name}}"
+  - name: users_daily_vars
+    entity_cohort: models/users_with_valid_email
+    time_grain: "day"
+    vars:
+      - entity_var:
+          name: users_max_timestamp
+          select: max(timestamp)
+          from: inputs/rsIdentifies
+  - name: us_users_var
+    entity_cohort: models/churned_united_states_users
+    time_grain: "day"
+    vars:
+      - entity_var:
+          name: first_name # entity-var with the same name, but cohort feature_view should select this
+          select: "{{users_with_valid_email.Var('first_name_copy')}}"
+      - input_var:
+          name: user_data_rank
+          description: "Rank of user data based on email availability"
+          select: RANK()
+          from: inputs/rsIdentifies
+          window:
+            partition_by:
+              - user_main_id
+            order_by:
+              - "CASE WHEN email IS NOT NULL THEN 1 ELSE 2 END"
+      - entity_var:
+          name: top_user_emails
+          select: ANY_VALUE(email)
+          from: inputs/rsIdentifies
+          where: "{{ rsIdentifies.Var('user_data_rank') }} <= 1"
+          is_feature: true
+          description: "Top ranked user email data"
+  - name: new_users_vars
+    entity_cohort: models/new_users
+    time_grain: "day"
+    vars:
+      - entity_var:
+          name: campaign_sources
+          select: "{{list_agg('context_campaign_source', ',')}}"
+          from: inputs/rsTracks

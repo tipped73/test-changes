@@ -1,0 +1,33 @@
+name: sample_test
+schema_version: 96
+retention_period: 24h
+connection: test
+model_folders:
+  - models
+entities:
+  - name: user
+    id_stitcher: models/test_id__
+    id_types:
+      - user_id
+      - anonymous_id
+      - email
+    feature_views:
+      materialization:
+        output_type: table
+
+id_types:
+  - name: user_id
+  - name: anonymous_id
+    filters:
+      - type: exclude
+        value: "unknown"
+      - type: exclude
+        value: "NaN"
+  - name: email
+    filters:
+      - type: include
+        regex: ".+@.+"
+      - type: exclude
+        value: "test@company.com"
+
+default_time_grain: day
