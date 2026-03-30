@@ -12,7 +12,7 @@ inputs:
         - name: anonymous_id
         - name: email
     app_defaults:
-      csv: "../common.xtra/identifies.csv"
+      csv: "identifies.csv"
       occurred_at_col: timestamp
       ids:
         - select: "user_id"
@@ -36,7 +36,7 @@ inputs:
         - name: user_id
         - name: anonymous_id
     app_defaults:
-      csv: "../common.xtra/tracks.csv"
+      csv: "tracks.csv"
       occurred_at_col: timestamp
       ids:
         - select: "user_id"
@@ -57,7 +57,7 @@ inputs:
         - name: user_id
         - name: anonymous_id
     app_defaults:
-      csv: "../common.xtra/pages.csv"
+      csv: "pages.csv"
       occurred_at_col: timestamp
       ids:
         - select: "user_id"
